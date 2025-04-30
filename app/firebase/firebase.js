@@ -2,14 +2,14 @@
 import { initializeApp } from "firebase/app";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCE3nX-gm6z1LwR1xWFl4d-rx_AMfC7QuE",
-  authDomain: "ghummakad-370ad.firebaseapp.com",
-  projectId: "ghummakad-370ad",
-  storageBucket: "ghummakad-370ad.firebasestorage.app",
-  messagingSenderId: "755463994081",
-  appId: "1:755463994081:web:748ce4e3b3ae32f4ced5a0",
-  measurementId: "G-51R9RPC3TX"
+  apiKey: "AIzaSyBay7Mkf8xgD-UC2iYxwp17FRnGAnkYMOI",
+  authDomain: "ghumma.firebaseapp.com",
+  projectId: "ghumma",
+  storageBucket: "ghumma.firebasestorage.app",
+  messagingSenderId: "774001538222",
+  appId: "1:774001538222:web:0bc533883c71360fe0693f",
+  measurementId: "G-6TNLWZRH0N"
 };
 
-// Initialize Firebase
+
 export const app = initializeApp(firebaseConfig);
