@@ -15,9 +15,7 @@ function Footer() {
         />
       </div>
       <div className="text-gray-700 font-semibold">
-        <Link href="/dashboard">
-          <h1 className="hover:text-[#3BA99C] transition-colors">Dashboard</h1>
-        </Link>
+        
         <Link href="/trips">
           <h1 className="hover:text-[#3BA99C] transition-colors">My Trips</h1>
         </Link>

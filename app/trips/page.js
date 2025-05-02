@@ -1,9 +1,12 @@
-import React from 'react'
+import Link from "next/link";
+import React from "react";
 
-function Trips() {
+function trips() {
   return (
-    <div>Trips</div>
-  )
+    <div>
+      <Link href="trips/trip">Hola amigo</Link>
+    </div>
+  );
 }
 
-export default Trips
+export default trips;

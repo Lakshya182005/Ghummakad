@@ -3,24 +3,41 @@ import React, { useRef } from "react";
 import { createUserWithEmailAndPassword, getAuth } from "firebase/auth";
 import { app } from "../firebase/firebase";
 import Link from "next/link";
+import { getFirestore, collection, addDoc } from "firebase/firestore"; // Import getFirestore
 
 function SignUp() {
   let emailRef = useRef("");
   let passwordRef = useRef("");
-
   const auth = getAuth(app);
+  const db = getFirestore(app); // Initialize Firestore
 
   async function handleSignUp(e) {
     e.preventDefault();
     try {
-      await createUserWithEmailAndPassword(
+      const userCredential = await createUserWithEmailAndPassword(
         auth,
         emailRef.current.value,
         passwordRef.current.value
       );
-      console.log("signup done", emailRef.current, passwordRef.current);
+      const user = userCredential.user;
+      console.log("Signup done for user:", user.uid);
+
+      // Now you can add user data to Firestore
+      try {
+        const docRef = await addDoc(collection(db, "users"), {
+          uid: user.uid, // Store the user's UID
+          email: emailRef.current.value
+          // Add any other relevant user data here
+        });
+        console.log("User data added to Firestore with ID: ", docRef.id);
+        // Optionally redirect the user or update UI
+      } catch (error) {
+        console.error("Error adding user data to Firestore: ", error);
+        // Handle the error appropriately
+      }
     } catch (err) {
-      console.log(err);
+      console.error("Signup error:", err);
+      // Handle signup errors (e.g., display error message to the user)
     }
   }
 
@@ -45,7 +62,9 @@ function SignUp() {
           placeholder="Enter your Password"
           className="w-full p-3 border border-mist rounded-xl focus:outline-none focus:ring-2 focus:ring-teal"
         />
-        <Link href="/login"><p>Already have an Account?</p></Link>
+        <Link href="/login">
+          <p>Already have an Account?</p>
+        </Link>
         <input
           type="submit"
           value="Sign Up"
