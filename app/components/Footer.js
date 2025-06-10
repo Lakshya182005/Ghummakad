@@ -22,9 +22,6 @@ function Footer() {
         <Link href="/about">
           <h1 className="hover:text-[#3BA99C] transition-colors">About Us</h1>
         </Link>
-        <Link href="/blog">
-          <h1 className="hover:text-[#3BA99C] transition-colors">Blogs</h1>
-        </Link>
       </div>
       <div>
         <div>

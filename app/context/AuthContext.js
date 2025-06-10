@@ -1,25 +1,46 @@
 "use client";
 import { createContext, useContext, useEffect, useState } from "react";
-import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
-import { app } from "../firebase/firebase";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { auth } from "../firebase/firebase";
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const auth = getAuth(app);
+  
   const [user, setUser] = useState(null);
 
-  useEffect(
-    () => {
-      const unsubscribe = onAuthStateChanged(auth, firebaseUser => {
-        setUser(firebaseUser);
-      });
-      return () => unsubscribe();
-    },
-    [auth]
-  );
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
 
-  const logout = () => signOut(auth);
+        let username = null;
+        const stored = localStorage.getItem("ghummakadUser");
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            username = parsed.username || null;
+          } catch (e) {
+            console.error("Failed to parse ghummakadUser from localStorage", e);
+          }
+        }
+
+        setUser({
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          username: username,
+        });
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [auth]);
+
+  const logout = () => {
+    localStorage.removeItem("ghummakadUser");
+    return signOut(auth);
+  };
 
   return (
     <AuthContext.Provider value={{ user, logout }}>
