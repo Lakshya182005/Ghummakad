@@ -11,6 +11,9 @@ import {
 import { Icon } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useRouter, useParams } from "next/navigation";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "@/app/firebase/firebase";
+import { collection, doc, getDoc, updateDoc } from "firebase/firestore";
 
 const customIcon = new Icon({
   iconUrl: "/locationMarker.png",
@@ -27,28 +30,65 @@ export default function Trips({ tripId }) {
   const router = useRouter();
   const inputRef = useRef(null);
   const [selectedPosition, setSelectedPosition] = useState([28.6139, 77.2088]);
-  const [tripData, setTripData] = useState({ title: "Untitled Trip", pins: {} });
+  const [tripData, setTripData] = useState({
+    title: "Untitled Trip",
+    pins: {}
+  });
   const [expandedLogId, setExpandedLogId] = useState(null);
+  const [userId, setUserId] = useState(null);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !tripId) return;
-    const allTrips = JSON.parse(localStorage.getItem("ghummakadTrips")) || {};
-    if (allTrips[tripId]) {
-      setTripData(allTrips[tripId]);
-    }
-  }, [tripId]);
+  // Track auth state
+  useEffect(
+    () => {
+      const unsubscribe = onAuthStateChanged(auth, user => {
+        if (user) setUserId(user.uid);
+        else router.push("/login");
+      });
+      return () => unsubscribe();
+    },
+    [router]
+  );
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !tripId) return;
-    const allTrips = JSON.parse(localStorage.getItem("ghummakadTrips")) || {};
-    allTrips[tripId] = tripData;
-    localStorage.setItem("ghummakadTrips", JSON.stringify(allTrips));
-  }, [tripData, tripId]);
+  useEffect(
+    () => {
+      if (!userId || !tripId) return;
+
+      const fetchTrip = async () => {
+        const docRef = doc(db, "trips", userId, "myTrips", tripId);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          setTripData(docSnap.data());
+        } else {
+          alert("Trip not found");
+        }
+      };
+
+      fetchTrip();
+    },
+    [userId, tripId]
+  );
+
+  useEffect(
+    () => {
+      if (!userId || !tripId) return;
+
+      const saveTripData = async () => {
+        const docRef = doc(db, "trips", userId, "myTrips", tripId);
+        await updateDoc(docRef, tripData);
+      };
+
+      saveTripData();
+    },
+    [tripData]
+  ); // will run every time pins or title change
 
   const handleSearch = async e => {
     e.preventDefault();
     const query = inputRef.current.value;
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`);
+    // const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`);
+    // const data = await res.json();
+    const res = await fetch(`/api/nominatim?q=${query}`);
     const data = await res.json();
 
     if (data && data.length > 0) {
@@ -60,6 +100,7 @@ export default function Trips({ tripId }) {
         popup: display_name,
         log: { time: "", description: "", image: "" }
       };
+
       setTripData(prev => ({
         ...prev,
         pins: { ...prev.pins, [id]: newPin }
@@ -97,14 +138,18 @@ export default function Trips({ tripId }) {
 
   const moveMarker = (pinIds, index, direction) => {
     const keys = Object.keys(pinIds);
-    if ((direction === "up" && index === 0) || (direction === "down" && index === keys.length - 1)) return;
+    if (
+      (direction === "up" && index === 0) ||
+      (direction === "down" && index === keys.length - 1)
+    )
+      return;
     const newKeys = [...keys];
     const temp = newKeys[index];
     newKeys[index] = newKeys[direction === "up" ? index - 1 : index + 1];
     newKeys[direction === "up" ? index - 1 : index + 1] = temp;
 
     const newPins = {};
-    newKeys.forEach(k => newPins[k] = tripData.pins[k]);
+    newKeys.forEach(k => (newPins[k] = tripData.pins[k]));
     setTripData(prev => ({ ...prev, pins: newPins }));
   };
 
@@ -114,15 +159,16 @@ export default function Trips({ tripId }) {
         <div className="flex items-center justify-between mb-4">
           <input
             value={tripData.title}
-            onChange={e => setTripData(prev => ({ ...prev, title: e.target.value }))}
+            onChange={e =>
+              setTripData(prev => ({ ...prev, title: e.target.value }))}
             className="font-semibold text-lg border-b w-full focus:outline-none"
           />
           <button
-          onClick={() => router.push("/trips")}
-          className="bg-gray-200 w-40 text-gray-800 px-2 py-2 rounded hover:bg-gray-300"
-        >
-          ← Go Back
-        </button>
+            onClick={() => router.push("/trips")}
+            className="bg-gray-200 w-40 text-gray-800 px-2 py-2 rounded hover:bg-gray-300"
+          >
+            ← Go Back
+          </button>
         </div>
 
         <form onSubmit={handleSearch} className="flex gap-2 mb-4">
@@ -140,28 +186,49 @@ export default function Trips({ tripId }) {
           </button>
         </form>
 
-        {Object.values(tripData.pins).map((m, index) => (
-          <div key={m.id} className="border p-3 rounded mb-3 bg-gray-50 shadow-sm">
+        {Object.values(tripData.pins).map((m, index) =>
+          <div
+            key={m.id}
+            className="border p-3 rounded mb-3 bg-gray-50 shadow-sm"
+          >
             <div className="flex justify-between items-center mb-1">
-              <h3 className="font-semibold text-sm">{index + 1}. {m.popup}</h3>
+              <h3 className="font-semibold text-sm">
+                {index + 1}. {m.popup}
+              </h3>
               <div className="space-x-1">
-                <button onClick={() => moveMarker(tripData.pins, index, "up")} className="px-2 py-1 text-sm bg-gray-200 rounded">↑</button>
-                <button onClick={() => {
-                  const newPins = { ...tripData.pins };
-                  delete newPins[m.id];
-                  setTripData(prev => ({ ...prev, pins: newPins }));
-                }} className="text-red-600 underline">Remove</button>
-                <button onClick={() => moveMarker(tripData.pins, index, "down")} className="px-2 py-1 text-sm bg-gray-200 rounded">↓</button>
+                <button
+                  onClick={() => moveMarker(tripData.pins, index, "up")}
+                  className="px-2 py-1 text-sm bg-gray-200 rounded"
+                >
+                  ↑
+                </button>
+                <button
+                  onClick={() => {
+                    const newPins = { ...tripData.pins };
+                    delete newPins[m.id];
+                    setTripData(prev => ({ ...prev, pins: newPins }));
+                  }}
+                  className="text-red-600 underline"
+                >
+                  Remove
+                </button>
+                <button
+                  onClick={() => moveMarker(tripData.pins, index, "down")}
+                  className="px-2 py-1 text-sm bg-gray-200 rounded"
+                >
+                  ↓
+                </button>
               </div>
             </div>
             <button
               className="text-blue-600 text-sm mt-1 underline"
-              onClick={() => setExpandedLogId(prev => prev === m.id ? null : m.id)}
+              onClick={() =>
+                setExpandedLogId(prev => (prev === m.id ? null : m.id))}
             >
               {expandedLogId === m.id ? "Hide Log" : "Add/View Log"}
             </button>
 
-            {expandedLogId === m.id && (
+            {expandedLogId === m.id &&
               <div className="mt-2 space-y-2 bg-white p-2 rounded border">
                 <div>
                   <label className="text-sm">Time (optional)</label>
@@ -169,7 +236,8 @@ export default function Trips({ tripId }) {
                     type="datetime-local"
                     className="w-full border rounded p-1"
                     value={m.log.time}
-                    onChange={e => handleLogChange(m.id, "time", e.target.value)}
+                    onChange={e =>
+                      handleLogChange(m.id, "time", e.target.value)}
                   />
                 </div>
                 <div>
@@ -178,8 +246,9 @@ export default function Trips({ tripId }) {
                     rows="2"
                     className="w-full border rounded p-1"
                     value={m.log.description}
-                    onChange={e => handleLogChange(m.id, "description", e.target.value)}
-                  ></textarea>
+                    onChange={e =>
+                      handleLogChange(m.id, "description", e.target.value)}
+                  />
                 </div>
                 <div>
                   <label className="text-sm">Image (optional)</label>
@@ -188,39 +257,55 @@ export default function Trips({ tripId }) {
                     accept="image/*"
                     onChange={e => handleImageUpload(m.id, e.target.files[0])}
                   />
-                  {m.log.image && <img src={m.log.image} alt="Log" className="mt-2 max-h-40 rounded" />}
+                  {m.log.image &&
+                    <img
+                      src={m.log.image}
+                      alt="Log"
+                      className="mt-2 max-h-40 rounded"
+                    />}
                 </div>
-              </div>
-            )}
+              </div>}
           </div>
-        ))}
+        )}
       </aside>
 
       <main className="flex-1">
         <MapContainer center={selectedPosition} zoom={5} className="h-full">
           <TileLayer
-            attribution={'© OpenStreetMap contributors'}
+            attribution={"© OpenStreetMap contributors"}
             url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <ChangeMapView coords={selectedPosition} />
 
-          {Object.values(tripData.pins).length > 1 && (
+          {Object.values(tripData.pins).length > 1 &&
             <Polyline
               positions={Object.values(tripData.pins).map(m => m.geocode)}
               pathOptions={{ color: "teal", weight: 3 }}
-            />
-          )}
+            />}
 
-          {Object.values(tripData.pins).map((m, index) => (
+          {Object.values(tripData.pins).map((m, index) =>
             <Marker key={index} position={m.geocode} icon={customIcon}>
               <Popup>
-                <h1 className="font-semibold">{m.popup}</h1>
-                {m.log.description && <p>{m.log.description}</p>}
-                {m.log.time && <p className="text-xs text-gray-500">🕒 {m.log.time}</p>}
-                {m.log.image && <img src={m.log.image} alt="Log" className="mt-2 max-h-32 rounded" />}
+                <h1 className="font-semibold">
+                  {m.popup}
+                </h1>
+                {m.log.description &&
+                  <p>
+                    {m.log.description}
+                  </p>}
+                {m.log.time &&
+                  <p className="text-xs text-gray-500">
+                    🕒 {m.log.time}
+                  </p>}
+                {m.log.image &&
+                  <img
+                    src={m.log.image}
+                    alt="Log"
+                    className="mt-2 max-h-32 rounded"
+                  />}
               </Popup>
             </Marker>
-          ))}
+          )}
         </MapContainer>
       </main>
     </div>

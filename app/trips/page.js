@@ -1,44 +1,86 @@
-'use client'
+"use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  collection,
+  addDoc,
+  deleteDoc,
+  doc,
+  getDocs
+} from "firebase/firestore";
+import { db, auth } from "@/app/firebase/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
 export default function MyTrips() {
   const router = useRouter();
   const [trips, setTrips] = useState({});
+  const [userId, setUserId] = useState(null);
 
-  // Load all trips from localStorage on mount
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const data = localStorage.getItem("ghummakadTrips");
-    if (data) {
-      setTrips(JSON.parse(data));
-    }
-  }, []);
+  // Track auth state
+  useEffect(
+    () => {
+      const unsubscribe = onAuthStateChanged(auth, user => {
+        if (user) setUserId(user.uid);
+        else router.push("/login");
+      });
+      return () => unsubscribe();
+    },
+    [router]
+  );
 
-  // Create a new trip and navigate to it
-  const createTrip = () => {
-    const newId = Date.now().toString();
-    const newTrip = {
+  // Fetch trips whenever userId changes or on component re-focus
+  useEffect(
+    () => {
+      if (!userId) return;
+
+      const fetchTrips = async () => {
+        const snapshot = await getDocs(
+          collection(db, "trips", userId, "myTrips")
+        );
+
+        const tripsData = {};
+        snapshot.forEach(docSnap => {
+          tripsData[docSnap.id] = docSnap.data();
+        });
+        setTrips(tripsData);
+      };
+
+      // Initial fetch
+      fetchTrips();
+
+      // Refetch on visibility change (when user comes back to tab/page)
+      const handleVisibility = () => {
+        if (document.visibilityState === "visible") {
+          fetchTrips();
+        }
+      };
+
+      document.addEventListener("visibilitychange", handleVisibility);
+      return () =>
+        document.removeEventListener("visibilitychange", handleVisibility);
+    },
+    [userId]
+  );
+
+  const createTrip = async () => {
+    if (!userId) return;
+
+    const docRef = await addDoc(collection(db, "trips", userId, "myTrips"), {
       title: "Untitled Trip",
       pins: {}
-    };
+    });
 
-    const updatedTrips = {
-      ...trips,
-      [newId]: newTrip
-    };
-
-    localStorage.setItem("ghummakadTrips", JSON.stringify(updatedTrips));
-    router.push(`/trips/${newId}`);
+    router.push(`/trips/${docRef.id}`);
   };
 
-  // Delete a trip
-  const deleteTrip = (tripId) => {
+  const deleteTrip = async tripId => {
+    if (!userId) return;
+
+    await deleteDoc(doc(db, userId, "trips", tripId));
     const updatedTrips = { ...trips };
     delete updatedTrips[tripId];
     setTrips(updatedTrips);
-    localStorage.setItem("ghummakadTrips", JSON.stringify(updatedTrips));
   };
 
   return (
@@ -48,20 +90,26 @@ export default function MyTrips() {
         <button
           onClick={createTrip}
           className="bg-teal-600 text-white px-4 py-2 rounded shadow"
+          disabled={!userId}
         >
           + Create Trip
         </button>
       </div>
 
-      {Object.entries(trips).map(([tripId, trip]) => (
+      {Object.entries(trips).length === 0 &&
+        <p className="text-gray-500">No trips yet.</p>}
+
+      {Object.entries(trips).map(([tripId, trip]) =>
         <div
           key={tripId}
           className="border rounded-lg p-4 flex items-center justify-between hover:shadow transition"
         >
           <div>
-            <h2 className="text-xl font-semibold">{trip.title}</h2>
+            <h2 className="text-xl font-semibold">
+              {trip.title}
+            </h2>
             <p className="text-sm text-gray-500">
-              {new Date(Number(tripId)).toLocaleString()}
+              {trip.createdAt ? new Date(trip.createdAt).toLocaleString() : "—"}
             </p>
           </div>
           <div className="flex gap-2">
@@ -79,7 +127,7 @@ export default function MyTrips() {
             </button>
           </div>
         </div>
-      ))}
+      )}
     </div>
   );
 }

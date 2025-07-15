@@ -2,6 +2,10 @@
 
 import { useAuth } from "./context/AuthContext";
 import { useRouter } from "next/navigation";
+import cors from 'cors';
+
+app.use(cors());
+
 
 export default function Home() {
   const { user } = useAuth();
