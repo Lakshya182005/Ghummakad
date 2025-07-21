@@ -7,42 +7,63 @@ import { doc, getDoc } from "firebase/firestore";
 import { db, auth } from "@/app/firebase/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 
-const DynamicTrip = dynamic(() => import("./trip"), {
-  ssr: false
-});
+// Dynamically load actual Trip component
+const DynamicTrip = dynamic(() => import("./trip"), { ssr: false });
 
 export default function TripPage() {
   const tripId = useParams()["TripId"];
   const router = useRouter();
-  const [userId, setUserId] = useState(null);
-  useEffect(
-    () => {
-      const unsubscribe = onAuthStateChanged(auth, user => {
-        if (user) setUserId(user.uid);
-        else router.push("/login");
+
+  const [isAllowed, setIsAllowed] = useState(false);
+  const [checked, setChecked] = useState(false); // track loading
+
+  useEffect(() => {
+    const checkAccess = async () => {
+      if (!tripId) return;
+
+      // 1. Check shared/public trip
+      const publicRef = doc(db, "sharedTrips", tripId);
+      const publicSnap = await getDoc(publicRef);
+
+      if (publicSnap.exists()) {
+        setIsAllowed(true);
+        setChecked(true);
+        return;
+      }
+
+      // 2. If not shared, check private via auth
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+          // Not shared. Not logged in.
+          router.push("/404");
+          return;
+        }
+
+        const privateRef = doc(db, "trips", user.uid, "myTrips", tripId);
+        const privateSnap = await getDoc(privateRef);
+
+        if (privateSnap.exists()) {
+          setIsAllowed(true);
+        } else {
+          router.push("/404");
+        }
+
+        setChecked(true);
       });
-      return () => unsubscribe();
-    },
-    [router]
-  );
+    };
 
-  useEffect(
-    () => {
-      const fetchTrip = async () => {
-        if (!userId || !tripId) return;
+    checkAccess();
+  }, [tripId, router]);
 
-        const tripRef = doc(db, "trips", userId, "myTrips", tripId);
-        const tripSnap = await getDoc(tripRef);
-      };
-
-      fetchTrip();
-    },
-    [userId, tripId]
-  );
+  if (!checked) {
+    return (
+      <div className="h-screen flex items-center justify-center text-[#3BA99C] font-semibold">
+        Loading trip...
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6 space-y-6">
-      <DynamicTrip tripId={tripId} />
-    </div>
+    <div className="space-y-6">{isAllowed && <DynamicTrip tripId={tripId} />}</div>
   );
 }

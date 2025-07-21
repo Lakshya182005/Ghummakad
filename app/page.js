@@ -2,11 +2,28 @@
 
 import { useAuth } from "./context/AuthContext";
 import { useRouter } from "next/navigation";
-
+import { getDoc, doc } from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth,db } from "./firebase/firebase";
 
 export default function Home() {
-  const { user } = useAuth();
   const router = useRouter();
+  const [username, setUsername] = useState("");
+  useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, async user => {
+    if (user) {
+
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        setUsername(data?.username || user.email);
+      }
+    }
+  });
+
+  return () => unsubscribe();
+}, [router]);
 
   const features = [
     {
@@ -43,9 +60,7 @@ export default function Home() {
           }}
         >
           <div className="flex flex-col gap-2 text-left">
-            <h1 className="text-white text-4xl font-extrabold sm:text-5xl">
-              Welcome, {user?.username || "Traveler"}!
-            </h1>
+            <h1 className="text-white text-5xl font-bold">Welcome back, {username || "traveler"} 👋</h1>
             <h2 className="text-white text-base mt-2 sm:text-lg">
               Start your next adventure by pinning memories on the map.
             </h2>

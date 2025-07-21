@@ -8,9 +8,7 @@ export async function GET(req) {
     });
 
   const response = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-      q
-    )}`,
+    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`,
     {
       headers: {
         "User-Agent": "Ghummakad"
